@@ -37,8 +37,7 @@ module Datadoge
       def send_event_to_statsd(payload)
         action = payload[:action] || :increment
         measurement = payload[:measurement]
-        prefix = Datadoge.configuration.metric_prefix
-        key_name = "#{prefix}.#{measurement}"
+        key_name = "#{Datadoge.configuration.prefix}.#{measurement}"
         value = payload[:value]
         tags = payload[:tags]
         if action == :increment
