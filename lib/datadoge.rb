@@ -7,7 +7,7 @@ module Datadoge
 
   with_configuration do
     has :environments, classes: Array, default: ['production']
-    has :metric_prefix, classes: String, default: ''
+    has :prefix, classes: String, default: 'rails'
     has :tags, classes: Array, default: []
   end
 
@@ -21,9 +21,8 @@ module Datadoge
         action = "action:#{event.payload[:action]}"
         format = "format:#{event.payload[:format] || 'all'}"
         format = "format:all" if format == "format:*/*"
-        host = "host:#{ENV['INSTRUMENTATION_HOSTNAME']}"
         status = event.payload[:status]
-        tags = [controller, action, format, host]
+        tags = [controller, action, format]
         tags.concat Datadoge.configuration.tags
         ActiveSupport::Notifications.instrument :performance, :action => :timing, :tags => tags, :measurement => "request.total_duration", :value => event.duration
         ActiveSupport::Notifications.instrument :performance, :action => :timing, :tags => tags,  :measurement => "database.query.time", :value => event.payload[:db_runtime]
@@ -31,18 +30,17 @@ module Datadoge
         ActiveSupport::Notifications.instrument :performance, :tags => tags,  :measurement => "request.status.#{status}"
       end
 
-      ActiveSupport::Notifications.subscribe /performance/ do |name, start, finish, id, payload|
-        send_event_to_statsd(name, payload) if Datadoge.configuration.environments.include?(Rails.env)
+      ActiveSupport::Notifications.subscribe /performance/ do |_, start, finish, id, payload|
+        send_event_to_statsd(payload) if Datadoge.configuration.environments.include?(Rails.env)
       end
 
-      def send_event_to_statsd(name, payload)
+      def send_event_to_statsd(payload)
         action = payload[:action] || :increment
         measurement = payload[:measurement]
         prefix = Datadoge.configuration.metric_prefix
-        measurement = "#{prefix}.#{measurement}" if prefix != ''
+        key_name = "#{prefix}.#{measurement}"
         value = payload[:value]
         tags = payload[:tags]
-        key_name = "#{name.to_s.capitalize}.#{measurement}"
         if action == :increment
           $statsd.increment key_name, :tags => tags
         else
