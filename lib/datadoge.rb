@@ -7,6 +7,8 @@ module Datadoge
 
   with_configuration do
     has :environments, classes: Array, default: ['production']
+    has :metric_prefix, classes: String, default: ''
+    has :tags, classes: Array, default: []
   end
 
   class Railtie < Rails::Railtie
@@ -22,6 +24,7 @@ module Datadoge
         host = "host:#{ENV['INSTRUMENTATION_HOSTNAME']}"
         status = event.payload[:status]
         tags = [controller, action, format, host]
+        tags.concat Datadoge.configuration.tags
         ActiveSupport::Notifications.instrument :performance, :action => :timing, :tags => tags, :measurement => "request.total_duration", :value => event.duration
         ActiveSupport::Notifications.instrument :performance, :action => :timing, :tags => tags,  :measurement => "database.query.time", :value => event.payload[:db_runtime]
         ActiveSupport::Notifications.instrument :performance, :action => :timing, :tags => tags,  :measurement => "web.view.time", :value => event.payload[:view_runtime]
@@ -35,6 +38,8 @@ module Datadoge
       def send_event_to_statsd(name, payload)
         action = payload[:action] || :increment
         measurement = payload[:measurement]
+        prefix = Datadoge.configuration.metric_prefix
+        measurement = "#{prefix}.#{measurement}" if prefix != ''
         value = payload[:value]
         tags = payload[:tags]
         key_name = "#{name.to_s.capitalize}.#{measurement}"
